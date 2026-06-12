@@ -34,15 +34,16 @@ class ProximityActorWatch extends ProximityRectWatch {
     super(null, monitorIndex, mode, xThreshold, yThreshold, handler)
     this.actor = actor
 
-    this._allocationChangedId = actor.connect('notify::allocation', () =>
+    this.actor.connectObject('notify::allocation', () =>
       this._updateWatchRect(),
+      this
     )
 
     this._updateWatchRect()
   }
 
   destroy() {
-    this.actor.disconnect(this._allocationChangedId)
+    this.actor.disconnectObject(this)
   }
 
   _updateWatchRect() {
@@ -63,7 +64,6 @@ export const ProximityManager = class {
     this._watches = {}
     this._focusedWindowInfo = null
 
-    this._signalsHandler = new Utils.GlobalSignalsHandler()
     this._timeoutsHandler = new Utils.TimeoutsHandler()
 
     this._bindSignals()
@@ -103,25 +103,26 @@ export const ProximityManager = class {
   }
 
   destroy() {
-    this._signalsHandler.destroy()
+    global.window_manager.disconnectObject(this)
+    Main.overview.disconnectObject(this)
+    global.display.disconnectObject(this)
+    
     this._timeoutsHandler.destroy()
     this._disconnectFocusedWindow()
     Object.keys(this._watches).forEach((id) => this.removeWatch(id))
   }
 
   _bindSignals() {
-    this._signalsHandler.add(
-      [global.window_manager, 'switch-workspace', () => this._queueUpdate()],
-      [Main.overview, 'hidden', () => this._queueUpdate()],
-      [
-        global.display,
-        'notify::focus-window',
-        () => {
-          this._setFocusedWindow()
-          this._queueUpdate()
-        },
-      ],
-      [global.display, 'restacked', () => this._queueUpdate()],
+    global.window_manager.connectObject('switch-workspace', () => this._queueUpdate(), this)
+    Main.overview.connectObject('hidden', () => this._queueUpdate(), this)
+    global.display.connectObject(
+      'notify::focus-window',
+      () => {
+        this._setFocusedWindow()
+        this._queueUpdate()
+      },
+      'restacked', () => this._queueUpdate(),
+      this
     )
   }
 
@@ -137,13 +138,10 @@ export const ProximityManager = class {
         focusedWindowInfo &&
         this._checkIfHandledWindowType(focusedWindowInfo.metaWindow)
       ) {
-        focusedWindowInfo.allocationId = focusedWindowInfo.window.connect(
-          'notify::allocation',
-          () => this._queueUpdate(),
-        )
-        focusedWindowInfo.destroyId = focusedWindowInfo.window.connect(
-          'destroy',
-          () => this._disconnectFocusedWindow(true),
+        focusedWindowInfo.window.connectObject(
+          'notify::allocation', () => this._queueUpdate(),
+          'destroy', () => this._disconnectFocusedWindow(true),
+          this
         )
 
         this._focusedWindowInfo = focusedWindowInfo
@@ -176,13 +174,9 @@ export const ProximityManager = class {
   }
 
   _disconnectFocusedWindow(destroy) {
+    // !destroy safely prevents manually calling disconnectObject on a window that is actively finalizing/dead
     if (this._focusedWindowInfo && !destroy) {
-      this._focusedWindowInfo.window.disconnect(
-        this._focusedWindowInfo.allocationId,
-      )
-      this._focusedWindowInfo.window.disconnect(
-        this._focusedWindowInfo.destroyId,
-      )
+      this._focusedWindowInfo.window.disconnectObject(this)
     }
 
     this._focusedWindowInfo = null

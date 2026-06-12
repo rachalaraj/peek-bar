@@ -63,33 +63,7 @@ export const BasicHandler = class {
   }
 }
 
-// Manage global signals
-export const GlobalSignalsHandler = class extends BasicHandler {
-  _create(item) {
-    let handlers = []
 
-    item[1] = [].concat(item[1])
-
-    for (let i = 0, l = item[1].length; i < l; ++i) {
-      let object = item[0]
-      let event = item[1][i]
-      let callback = item[2]
-      try {
-        let id = object.connect(event, callback)
-
-        handlers.push([object, id])
-      } catch (e) {
-        console.log(e)
-      }
-    }
-
-    return handlers
-  }
-
-  _remove(item) {
-    item[0].disconnect(item[1])
-  }
-}
 
 /**
  * Manage timeouts: the added timeouts have their id reset on completion

@@ -49,12 +49,10 @@ export const Intellihide = class {
     this._proximityManager = proximityManager
     this._holdStatus = Hold.NONE
 
-    this._signalsHandler = new Utils.GlobalSignalsHandler()
     this._timeoutsHandler = new Utils.TimeoutsHandler()
     this._injectionManager = new InjectionManager()
 
     this._intellihideChangedId = 0;
-    this.enabled = false
   }
 
   init() {
@@ -62,7 +60,6 @@ export const Intellihide = class {
   }
 
   enable() {
-    this.enabled = true
     this._overviewVisible = Main.overview.visible || false
     this._monitor = Main.layoutManager.primaryMonitor
     this._animationDestination = -1
@@ -87,7 +84,7 @@ export const Intellihide = class {
       Object.getPrototypeOf(overviewControls),
       'vfunc_allocate',
       (originalAllocate) => (box) => {
-        if (this.enabled && overviewControls._stateAdjustment) {
+        if (overviewControls._stateAdjustment) {
           // Smoothly scale the offset based on the overview state (0 = Desktop, 1 = Overview, 2 = AppGrid)
           let scale = Math.min(overviewControls._stateAdjustment.value, 1)
           let offset = Main.layoutManager.panelBox.height * scale
@@ -131,11 +128,7 @@ export const Intellihide = class {
       this._holdStatus = lastState
 
       if (lastState == Hold.NONE && Main.layoutManager._startingUp)
-        this._signalsHandler.add([
-          this._panelBox,
-          'notify::mapped',
-          () => this._hidePanel(true),
-        ])
+        this._panelBox.connectObject('notify::mapped', () => this._hidePanel(true), this)
       else this._queueUpdatePanelPosition()
     } else
       // -1 means that the option to persist hold isn't activated, so normal start
@@ -147,7 +140,6 @@ export const Intellihide = class {
   }
 
   disable(reset) {
-    this.enabled = false
     this._hover = false
 
     if (this._proximityWatchId) {
@@ -170,7 +162,10 @@ export const Intellihide = class {
     this._revealPanel(!reset)
     Utils.setDisplayUnredirect(true)
 
-    this._signalsHandler.destroy()
+    SETTINGS.disconnectObject(this)
+    Main.overview.disconnectObject(this)
+    this._panelBox.disconnectObject(this)
+    
     this._timeoutsHandler.destroy()
     this._injectionManager.clear()
   }
@@ -178,9 +173,7 @@ export const Intellihide = class {
   destroy() {
     SETTINGS.disconnect(this._intellihideChangedId)
 
-    if (this.enabled) {
-      this.disable()
-    }
+    this.disable()
   }
 
   toggle() {
@@ -190,8 +183,6 @@ export const Intellihide = class {
   }
 
   revealAndHold(holdStatus, immediate) {
-    if (!this.enabled) return
-
     if (!this._holdStatus) this._revealPanel(immediate)
 
     this._holdStatus |= holdStatus
@@ -200,8 +191,6 @@ export const Intellihide = class {
   }
 
   release(holdStatus) {
-    if (!this.enabled) return
-
     if (this._holdStatus & holdStatus) this._holdStatus -= holdStatus
 
     if (!this._holdStatus) {
@@ -232,50 +221,39 @@ export const Intellihide = class {
   }
 
   _bindGeneralSignals() {
-    this._signalsHandler.add(
-      [
-        SETTINGS,
-        [
-          'changed::intellihide-use-pointer',
-          'changed::intellihide-use-pressure',
-          'changed::intellihide-hide-from-windows',
-          'changed::intellihide-hide-from-monitor-windows',
-          'changed::intellihide-behaviour',
-          'changed::intellihide-pressure-threshold',
-          'changed::intellihide-pressure-time',
-        ],
-        () => this.reset(),
-      ],
-      [
-        Main.overview,
-        ['showing'],
-        () => {
-          this._overviewVisible = true
-          if (this._checkIfShouldBeVisible()) {
-            this._revealPanel(false, true); // Smooth reveal perfectly synced with no delay
-          }
-        },
-      ],
-      [
-        Main.overview,
-        ['hiding'],
-        () => {
-          this._overviewVisible = false
-          if (this._checkIfShouldBeVisible()) {
-            this._revealPanel();
-          } else {
-            this._hidePanel(false, true); // Smooth hide perfectly synced with no delay
-          }
-        },
-      ],
-      [
-        this._panelBox,
-        'notify::visible',
-        () => Utils.setDisplayUnredirect(!this._panelBox.visible),
-      ]
+    SETTINGS.connectObject(
+      'changed::intellihide-use-pointer', () => this.reset(),
+      'changed::intellihide-use-pressure', () => this.reset(),
+      'changed::intellihide-hide-from-windows', () => this.reset(),
+      'changed::intellihide-hide-from-monitor-windows', () => this.reset(),
+      'changed::intellihide-behaviour', () => this.reset(),
+      'changed::intellihide-pressure-threshold', () => this.reset(),
+      'changed::intellihide-pressure-time', () => this.reset(),
+      this
     )
 
+    Main.overview.connectObject(
+      'showing', () => {
+        this._overviewVisible = true
+        if (this._checkIfShouldBeVisible()) {
+          this._revealPanel(false, true);
+        }
+      },
+      'hiding', () => {
+        this._overviewVisible = false
+        if (this._checkIfShouldBeVisible()) {
+          this._revealPanel();
+        } else {
+          this._hidePanel(false, true);
+        }
+      },
+      this
+    )
 
+    this._panelBox.connectObject(
+      'notify::visible', () => Utils.setDisplayUnredirect(!this._panelBox.visible),
+      this
+    )
   }
 
   _setTrackPanel(enable) {
@@ -306,8 +284,7 @@ export const Intellihide = class {
         Shell.ActionMode.NORMAL,
       )
       this._pressureBarrier.addBarrier(this._edgeBarrier)
-      this._signalsHandler.add([
-        this._pressureBarrier,
+      this._pressureBarrier.connectObject(
         'trigger',
         () => {
           let [x, y] = global.get_pointer()
@@ -316,7 +293,8 @@ export const Intellihide = class {
             this._queueUpdatePanelPosition(true)
           else this._pressureBarrier._isTriggered = false
         },
-      ])
+        this
+      )
     }
 
     this._pointerWatch = PointerWatcher.getPointerWatcher().addWatch(
@@ -332,6 +310,7 @@ export const Intellihide = class {
     }
 
     if (this._pressureBarrier) {
+      this._pressureBarrier.disconnectObject(this)
       this._pressureBarrier.destroy()
       this._edgeBarrier.destroy()
 
