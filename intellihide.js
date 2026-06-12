@@ -442,8 +442,8 @@ export const Intellihide = class {
   }
 
   _checkIfShouldBeVisible(fromRevealMechanism) {
-    // 1. Overview and Menus take absolute precedence
-    if (this._overviewVisible || this._checkIfMenuOpenOrGrab()) {
+    // 1. Overview, Menus, and Manual Hold take absolute precedence
+    if (this._overviewVisible || this._checkIfMenuOpenOrGrab() || this._holdStatus) {
       return true
     }
 
