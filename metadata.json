@@ -8,10 +8,9 @@
     "47",
     "48",
     "49",
-    "50",
-    "51"
+    "50"
   ],
   "url": "https://github.com/rachalaraj/peek-bar",
   "settings-schema": "org.gnome.shell.extensions.peek-bar",
-  "version": 13
+  "version": 14
 }
