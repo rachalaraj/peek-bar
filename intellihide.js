@@ -51,8 +51,6 @@ export const Intellihide = class {
 
     this._timeoutsHandler = new Utils.TimeoutsHandler()
     this._injectionManager = new InjectionManager()
-
-    this._intellihideChangedId = 0;
   }
 
   init() {
@@ -68,7 +66,6 @@ export const Intellihide = class {
     this._hoveredOut = false
     this._windowOverlap = false
     this._translationProp = 'translation_y'
-    this._stageReleaseEventId = 0
     this._hoverOutTimeoutId = 0
 
     this._panelBox.translation_y = 0
@@ -154,11 +151,6 @@ export const Intellihide = class {
       this._hoverOutTimeoutId = 0
     }
 
-    if (this._stageReleaseEventId) {
-      global.stage.disconnect(this._stageReleaseEventId)
-      this._stageReleaseEventId = 0
-    }
-
     this._revealPanel(!reset)
     Utils.setDisplayUnredirect(true)
 
@@ -171,8 +163,6 @@ export const Intellihide = class {
   }
 
   destroy() {
-    SETTINGS.disconnect(this._intellihideChangedId)
-
     this.disable()
   }
 
@@ -252,6 +242,17 @@ export const Intellihide = class {
 
     this._panelBox.connectObject(
       'notify::visible', () => Utils.setDisplayUnredirect(!this._panelBox.visible),
+      this
+    )
+
+    global.display.connectObject(
+      'in-fullscreen-changed', () => {
+        // Defer update slightly to ensure layoutManager has updated its inFullscreen property
+        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+          this._queueUpdatePanelPosition()
+          return GLib.SOURCE_REMOVE
+        })
+      },
       this
     )
   }
@@ -428,7 +429,22 @@ export const Intellihide = class {
 
     // 2. If an app is fullscreen, and the setting to show in fullscreen is disabled,
     //    absolutely forbid revealing the panel.
-    if (this._monitor.inFullscreen && !SETTINGS.get_boolean('intellihide-show-in-fullscreen')) {
+    let inFullscreen = this._monitor.inFullscreen
+
+    // GNOME's inFullscreen property lags slightly during workspace transitions.
+    // We dynamically verify the current active workspace to ensure the animation is instant.
+    if (inFullscreen) {
+      let activeWorkspace = Utils.getCurrentWorkspace()
+      let hasFullscreen = activeWorkspace.list_windows().some(w =>
+        w.is_fullscreen() && w.get_monitor() === this._monitor.index
+      )
+
+      if (!hasFullscreen) {
+        inFullscreen = false
+      }
+    }
+
+    if (inFullscreen && !SETTINGS.get_boolean('intellihide-show-in-fullscreen')) {
       return false
     }
 
@@ -455,12 +471,28 @@ export const Intellihide = class {
   }
 
   _checkIfMenuOpenOrGrab() {
-    let grabActor = global.stage.get_grab_actor()
-    let sourceActor = grabActor?._sourceActor || grabActor
-    let isGrab =
-      sourceActor &&
-      (sourceActor == Main.layoutManager.dummyCursor ||
-        this._panelBox.contains(sourceActor))
+    let isGrab = false
+    let actor = global.stage.get_grab_actor()
+    
+    // Recursively walk up the actor tree (both visually and logically) 
+    // to see if the current grab originates from the panel.
+    while (actor && actor !== global.stage) {
+      if (actor === Main.layoutManager.dummyCursor || this._panelBox.contains(actor)) {
+        isGrab = true
+        break
+      }
+      
+      // Bridge the gap between floating menus and their panel origin
+      let nextActor = actor._sourceActor || actor.sourceActor || 
+                      actor._delegate?._sourceActor || actor._delegate?.sourceActor
+
+      if (nextActor && nextActor !== actor) {
+        actor = nextActor
+        continue
+      }
+      
+      actor = actor.get_parent()
+    }
 
     let isMenuOpen = Main.panel.menuManager && Main.panel.menuManager.activeMenu != null
     let shouldKeepOpen = isGrab || isMenuOpen

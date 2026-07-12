@@ -36,7 +36,6 @@ export default class PeekBarPreferences extends ExtensionPreferences {
         this._bindSpinButton(builder, settings, 'intellihide_pressure_time_spinbutton', 'intellihide-pressure-time')
         
         this._bindSwitch(builder, settings, 'intellihide_show_in_fullscreen_switch', 'intellihide-show-in-fullscreen')
-        this._bindSwitch(builder, settings, 'intellihide_only_secondary_switch', 'intellihide-only-secondary')
         
         this._bindSpinButton(builder, settings, 'intellihide_animation_time_spinbutton', 'intellihide-animation-time')
         this._bindSpinButton(builder, settings, 'intellihide_close_delay_spinbutton', 'intellihide-close-delay')
@@ -186,7 +185,7 @@ export default class PeekBarPreferences extends ExtensionPreferences {
                 }
                 if (isModifier) return Gdk.EVENT_PROPAGATE
 
-                if (state === 0) {
+                if (mask === 0) {
                     if (keyval === Gdk.KEY_Escape) {
                         dialog.close()
                         return Gdk.EVENT_STOP

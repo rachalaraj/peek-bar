@@ -164,17 +164,7 @@
             </child>
           </object>
         </child>
-        <child>
-          <object class="AdwActionRow" id="grid_intellihide_only_secondary">
-            <property name="subtitle" translatable="yes">(requires multi-monitors option)</property>
-            <property name="title" translatable="yes">Only hide secondary panels</property>
-            <child>
-              <object class="GtkSwitch" id="intellihide_only_secondary_switch">
-                <property name="valign">center</property>
-              </object>
-            </child>
-          </object>
-        </child>
+
         <child>
           <object class="AdwActionRow" id="intellihide_toggle_row">
             <property name="title" translatable="yes">Keyboard shortcut to reveal and hide the panel</property>
