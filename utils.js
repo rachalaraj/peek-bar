@@ -1,7 +1,5 @@
-import Clutter from 'gi://Clutter'
 import GLib from 'gi://GLib'
 import Meta from 'gi://Meta'
-import St from 'gi://St'
 import * as Config from 'resource:///org/gnome/shell/misc/config.js'
 import * as Main from 'resource:///org/gnome/shell/ui/main.js'
 
@@ -140,37 +138,3 @@ export const getTrackedActorData = (actor) => {
   if (trackedIndex >= 0) return Main.layoutManager._trackedActors[trackedIndex]
 }
 
-export const animate = function (actor, options) {
-  if (options.delay) {
-    options.delay = options.delay * 1000
-  }
-
-  options.duration = options.time * 1000
-  delete options.time
-
-  if (options.transition) {
-    //map Tweener easing equations to Clutter animation modes
-    options.mode =
-      {
-        easeInCubic: Clutter.AnimationMode.EASE_IN_CUBIC,
-        easeInOutCubic: Clutter.AnimationMode.EASE_IN_OUT_CUBIC,
-        easeInOutQuad: Clutter.AnimationMode.EASE_IN_OUT_QUAD,
-        easeOutQuad: Clutter.AnimationMode.EASE_OUT_QUAD,
-      }[options.transition] || Clutter.AnimationMode.LINEAR
-
-    delete options.transition
-  }
-
-  let params = [options]
-
-  if ('value' in options && actor instanceof St.Adjustment) {
-    params.unshift(options.value)
-    delete options.value
-  }
-
-  actor.ease.apply(actor, params)
-}
-
-export const stopAnimations = function (actor) {
-  actor.remove_all_transitions()
-}

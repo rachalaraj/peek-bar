@@ -157,6 +157,7 @@ export const Intellihide = class {
     SETTINGS.disconnectObject(this)
     Main.overview.disconnectObject(this)
     this._panelBox.disconnectObject(this)
+    global.display.disconnectObject(this)
     
     this._timeoutsHandler.destroy()
     this._injectionManager.clear()
@@ -215,8 +216,6 @@ export const Intellihide = class {
       'changed::intellihide-use-pointer', () => this.reset(),
       'changed::intellihide-use-pressure', () => this.reset(),
       'changed::intellihide-hide-from-windows', () => this.reset(),
-      'changed::intellihide-hide-from-monitor-windows', () => this.reset(),
-      'changed::intellihide-behaviour', () => this.reset(),
       'changed::intellihide-pressure-threshold', () => this.reset(),
       'changed::intellihide-pressure-time', () => this.reset(),
       this

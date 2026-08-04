@@ -1,29 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist gettext-domain="gnome-shell-extensions">
-  <enum id='org.gnome.shell.extensions.peek-bar.proximityBehavior'>
-    <value value='0' nick='ALL_WINDOWS'/>
-    <value value='1' nick='FOCUSED_WINDOWS'/>
-  </enum>
+
   <schema path="/org/gnome/shell/extensions/peek-bar/" id="org.gnome.shell.extensions.peek-bar">
-    <key type="b" name="intellihide">
-      <default>false</default>
-      <summary>Intellihide</summary>
-      <description>Whether to intelligently hide the panel</description>
-    </key>
+
     <key type="b" name="intellihide-hide-from-windows">
       <default>false</default>
       <summary>Only hide from overlapping windows</summary>
       <description>Dictates if the dash should only hide when in conflict with windows</description>
     </key>
-    <key type="b" name="intellihide-hide-from-monitor-windows">
-      <default>false</default>
-      <summary>Only hide from windows on monitor</summary>
-    </key>
-    <key name="intellihide-behaviour" enum="org.gnome.shell.extensions.peek-bar.proximityBehavior">
-      <default>'FOCUSED_WINDOWS'</default>
-      <summary>Intellihide behaviour</summary>
-      <description>Dictates how to intelligently hide the panel</description>
-    </key>
+
     <key type="b" name="intellihide-use-pointer">
       <default>true</default>
       <summary>Intellihide mouse pointer</summary>
