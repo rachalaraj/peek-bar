@@ -41,7 +41,7 @@ class PeekBarIndicator extends QuickSettings.SystemIndicator {
     }
 
     updateState() {
-        let enabled = !!this._intellihide._enabled
+        let enabled = this._intellihide.isEnabled()
         let isHeld = (this._intellihide._holdStatus & 2) !== 0
         this._toggle.checked = enabled
         if (!enabled)

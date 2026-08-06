@@ -45,7 +45,6 @@ export const Intellihide = class {
     this._panelBox = Main.layoutManager.panelBox
     this._proximityManager = proximityManager
     this._holdStatus = Hold.NONE
-    this._enabled = false
 
     this._timeoutsHandler = new Utils.TimeoutsHandler()
     this._injectionManager = new InjectionManager()
@@ -56,9 +55,6 @@ export const Intellihide = class {
   }
 
   enable() {
-    if (this._enabled) return
-    this._enabled = true
-
     if (!this._timeoutsHandler)
       this._timeoutsHandler = new Utils.TimeoutsHandler()
 
@@ -146,9 +142,6 @@ export const Intellihide = class {
   }
 
   disable(reset) {
-    if (!this._enabled) return
-    this._enabled = false
-
     this._hover = false
 
     if (this._proximityWatchId) {
@@ -190,8 +183,12 @@ export const Intellihide = class {
     this.disable()
   }
 
+  isEnabled() {
+    return this._timeoutsHandler != null
+  }
+
   toggleExtension() {
-    if (this._enabled)
+    if (this.isEnabled())
       this.disable()
     else
       this.enable()
@@ -469,7 +466,7 @@ export const Intellihide = class {
   }
 
   _queueUpdatePanelPosition(fromRevealMechanism) {
-    if (!this._enabled || !this._timeoutsHandler) return
+    if (!this._timeoutsHandler) return
 
     if (
       !fromRevealMechanism &&
