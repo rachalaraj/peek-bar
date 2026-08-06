@@ -3,15 +3,14 @@ import GLib from 'gi://GLib'
 import Meta from 'gi://Meta'
 import Mtk from 'gi://Mtk'
 import Shell from 'gi://Shell'
+import St from 'gi://St'
 
 import * as Layout from 'resource:///org/gnome/shell/ui/layout.js'
 import { InjectionManager } from 'resource:///org/gnome/shell/extensions/extension.js'
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js'
-import * as OverviewControls from 'resource:///org/gnome/shell/ui/overviewControls.js'
 import * as PointerWatcher from 'resource:///org/gnome/shell/ui/pointerWatcher.js'
 
-import * as Proximity from './proximity.js'
 import * as Utils from './utils.js'
 
 let SETTINGS;
@@ -20,34 +19,33 @@ export const setSettings = (settings) => {
   SETTINGS = settings;
 };
 
-//timeout intervals
 const CHECK_POINTER_MS = 200
 const CHECK_GRAB_MS = 400
 const POST_ANIMATE_MS = 50
 const MIN_UPDATE_MS = 250
+const HOVER_OUT_MS = 250
 
-//timeout names
 const T1 = 'checkGrabTimeout'
 const T2 = 'limitUpdateTimeout'
 const T3 = 'postAnimateTimeout'
 const T4 = 'enableStartTimeout'
-
-const SIDE_CONTROLS_ANIMATION_TIME =
-  OverviewControls.SIDE_CONTROLS_ANIMATION_TIME /
-  (OverviewControls.SIDE_CONTROLS_ANIMATION_TIME > 1 ? 1000 : 1)
+const T5 = 'hoverOutTimeout'
+const T7 = 'notifyTimeout'
 
 export const Hold = {
   NONE: 0,
-  TEMPORARY: 1,
   PERMANENT: 2,
-  NOTIFY: 4,
+  NOTIFY_PEEK: 32,
 }
+
+
 
 export const Intellihide = class {
   constructor(proximityManager) {
     this._panelBox = Main.layoutManager.panelBox
     this._proximityManager = proximityManager
     this._holdStatus = Hold.NONE
+    this._enabled = false
 
     this._timeoutsHandler = new Utils.TimeoutsHandler()
     this._injectionManager = new InjectionManager()
@@ -58,15 +56,22 @@ export const Intellihide = class {
   }
 
   enable() {
+    if (this._enabled) return
+    this._enabled = true
+
+    if (!this._timeoutsHandler)
+      this._timeoutsHandler = new Utils.TimeoutsHandler()
+
     this._overviewVisible = Main.overview.visible || false
     this._monitor = Main.layoutManager.primaryMonitor
+    this._panelHeight = this._panelBox.get_height() || 27
     this._animationDestination = -1
     this._pendingUpdate = false
     this._hover = false
     this._hoveredOut = false
     this._windowOverlap = false
-    this._translationProp = 'translation_y'
-    this._hoverOutTimeoutId = 0
+    this._fullscreenIdleId = 0
+    this._startupMappedId = 0
 
     this._panelBox.translation_y = 0
     this._panelBox.translation_x = 0
@@ -74,21 +79,20 @@ export const Intellihide = class {
     this._setTrackPanel(true)
     this._bindGeneralSignals()
 
-    // Override vfunc_allocate to smoothly interpolate the layout bounds during overview transitions.
-    // This perfectly centers the AppGrid and Workspaces without any sudden layout snaps or stuttering.
     let overviewControls = Main.overview._overview._controls
     this._injectionManager.overrideMethod(
       Object.getPrototypeOf(overviewControls),
       'vfunc_allocate',
       (originalAllocate) => (box) => {
         if (overviewControls._stateAdjustment) {
-          // Smoothly scale the offset based on the overview state (0 = Desktop, 1 = Overview, 2 = AppGrid)
           let scale = Math.min(overviewControls._stateAdjustment.value, 1)
           let offset = Main.layoutManager.panelBox.height * scale
-
           box.y1 += offset
-          originalAllocate.call(overviewControls, box)
-          box.y1 -= offset // Revert to prevent cumulative state leakage
+          try {
+            originalAllocate.call(overviewControls, box)
+          } finally {
+            box.y1 -= offset
+          }
         } else {
           originalAllocate.call(overviewControls, box)
         }
@@ -100,13 +104,12 @@ export const Intellihide = class {
         x: this._monitor.x,
         y: this._monitor.y,
         width: this._monitor.width,
-        height: this._panelBox.get_height() || 27,
+        height: this._panelHeight,
       })
 
       this._proximityWatchId = this._proximityManager.createWatch(
         watched,
         this._monitor.index,
-        0, // Mode.ALL_WINDOWS
         0,
         0,
         (overlap) => {
@@ -119,16 +122,25 @@ export const Intellihide = class {
     if (SETTINGS.get_boolean('intellihide-use-pointer'))
       this._setRevealMechanism()
 
+    if (SETTINGS.get_boolean('intellihide-notify-reveal'))
+      this._connectNotifications()
+
     let lastState = SETTINGS.get_int('intellihide-persisted-state')
 
     if (lastState > -1) {
       this._holdStatus = lastState
 
-      if (lastState == Hold.NONE && Main.layoutManager._startingUp)
-        this._panelBox.connectObject('notify::mapped', () => this._hidePanel(true), this)
-      else this._queueUpdatePanelPosition()
+      if (lastState == Hold.NONE && Main.layoutManager._startingUp) {
+        this._startupMappedId = this._panelBox.connect('notify::mapped', () => {
+          if (this._startupMappedId) {
+            this._panelBox.disconnect(this._startupMappedId)
+            this._startupMappedId = 0
+          }
+          let immediate = !SETTINGS.get_boolean('intellihide-startup-animation')
+          this._hidePanel(immediate)
+        })
+      } else this._queueUpdatePanelPosition()
     } else
-      // -1 means that the option to persist hold isn't activated, so normal start
       this._timeoutsHandler.add([
         T4,
         SETTINGS.get_int('intellihide-enable-start-delay'),
@@ -137,18 +149,28 @@ export const Intellihide = class {
   }
 
   disable(reset) {
+    if (!this._enabled) return
+    this._enabled = false
+
     this._hover = false
 
     if (this._proximityWatchId) {
       this._proximityManager.removeWatch(this._proximityWatchId)
+      this._proximityWatchId = 0
     }
 
     this._setTrackPanel(false)
     this._removeRevealMechanism()
+    this._disconnectNotifications()
 
-    if (this._hoverOutTimeoutId) {
-      GLib.source_remove(this._hoverOutTimeoutId)
-      this._hoverOutTimeoutId = 0
+    if (this._fullscreenIdleId) {
+      GLib.Source.remove(this._fullscreenIdleId)
+      this._fullscreenIdleId = 0
+    }
+
+    if (this._startupMappedId) {
+      this._panelBox.disconnect(this._startupMappedId)
+      this._startupMappedId = 0
     }
 
     this._revealPanel(!reset)
@@ -156,10 +178,14 @@ export const Intellihide = class {
 
     SETTINGS.disconnectObject(this)
     Main.overview.disconnectObject(this)
-    this._panelBox.disconnectObject(this)
+    Main.layoutManager.disconnectObject(this)
     global.display.disconnectObject(this)
-    
-    this._timeoutsHandler.destroy()
+    this._panelBox.disconnectObject(this)
+
+    if (this._timeoutsHandler) {
+      this._timeoutsHandler.destroy()
+      this._timeoutsHandler = null
+    }
     this._injectionManager.clear()
   }
 
@@ -167,27 +193,38 @@ export const Intellihide = class {
     this.disable()
   }
 
+  toggleExtension() {
+    if (this._enabled)
+      this.disable()
+    else
+      this.enable()
+    this.onStateChanged?.()
+  }
+
   toggle() {
     this[this._holdStatus & Hold.PERMANENT ? 'release' : 'revealAndHold'](
       Hold.PERMANENT,
     )
+    this.onStateChanged?.()
   }
 
   revealAndHold(holdStatus, immediate) {
-    if (!this._holdStatus) this._revealPanel(immediate)
+    this._revealPanel(immediate)
 
     this._holdStatus |= holdStatus
 
     this._maybePersistHoldStatus()
+    this.onStateChanged?.()
   }
 
   release(holdStatus) {
-    if (this._holdStatus & holdStatus) this._holdStatus -= holdStatus
+    this._holdStatus &= ~holdStatus
 
     if (!this._holdStatus) {
       this._maybePersistHoldStatus()
       this._queueUpdatePanelPosition()
     }
+    this.onStateChanged?.()
   }
 
   reset() {
@@ -197,10 +234,6 @@ export const Intellihide = class {
 
   _hidesFromWindows() {
     return SETTINGS.get_boolean('intellihide-hide-from-windows')
-  }
-
-  _changeEnabledStatus() {
-    // Intentionally left empty as we are always enabled when the extension is active
   }
 
   _maybePersistHoldStatus() {
@@ -218,23 +251,22 @@ export const Intellihide = class {
       'changed::intellihide-hide-from-windows', () => this.reset(),
       'changed::intellihide-pressure-threshold', () => this.reset(),
       'changed::intellihide-pressure-time', () => this.reset(),
+      'changed::intellihide-notify-reveal', () => this.reset(),
       this
     )
 
     Main.overview.connectObject(
       'showing', () => {
         this._overviewVisible = true
-        if (this._checkIfShouldBeVisible()) {
-          this._revealPanel(false, true);
-        }
+        if (this._checkIfShouldBeVisible())
+          this._revealPanel(false, true)
       },
       'hiding', () => {
         this._overviewVisible = false
-        if (this._checkIfShouldBeVisible()) {
-          this._revealPanel();
-        } else {
-          this._hidePanel(false, true);
-        }
+        if (this._checkIfShouldBeVisible())
+          this._revealPanel()
+        else
+          this._hidePanel(false, true)
       },
       this
     )
@@ -246,14 +278,72 @@ export const Intellihide = class {
 
     global.display.connectObject(
       'in-fullscreen-changed', () => {
-        // Defer update slightly to ensure layoutManager has updated its inFullscreen property
-        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+        if (this._fullscreenIdleId)
+          GLib.Source.remove(this._fullscreenIdleId)
+        this._fullscreenIdleId = GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+          this._fullscreenIdleId = 0
           this._queueUpdatePanelPosition()
           return GLib.SOURCE_REMOVE
         })
       },
       this
     )
+
+    Main.layoutManager.connectObject(
+      'monitors-changed', () => this.reset(),
+      this
+    )
+  }
+
+  _connectNotifications() {
+    if (!Main.messageTray) return
+
+    Main.messageTray.connectObject(
+      'source-added', (_tray, source) => {
+        this._onNotification()
+        if (source) {
+          try {
+            source.connectObject('notification-added', () => this._onNotification(), this)
+          } catch (_) {}
+        }
+      },
+      this
+    )
+
+    if (Main.messageTray.getSources) {
+      try {
+        let sources = Main.messageTray.getSources()
+        sources.forEach(source => {
+          source.connectObject('notification-added', () => this._onNotification(), this)
+        })
+      } catch (_) {}
+    }
+  }
+
+  _disconnectNotifications() {
+    if (Main.messageTray) {
+      Main.messageTray.disconnectObject(this)
+      if (Main.messageTray.getSources) {
+        try {
+          let sources = Main.messageTray.getSources()
+          sources.forEach(source => source.disconnectObject(this))
+        } catch (_) {}
+      }
+    }
+  }
+
+  _onNotification() {
+    if (!SETTINGS.get_boolean('intellihide-notify-reveal')) return
+
+    if (this._holdStatus & Hold.NOTIFY_PEEK) {
+      this._timeoutsHandler.remove(T7)
+    } else {
+      this.revealAndHold(Hold.NOTIFY_PEEK)
+    }
+
+    this._timeoutsHandler.add([T7, SETTINGS.get_int('intellihide-notify-duration'), () => {
+      this.release(Hold.NOTIFY_PEEK)
+    }])
   }
 
   _setTrackPanel(enable) {
@@ -263,9 +353,8 @@ export const Intellihide = class {
       actorData.trackFullscreen = !enable
     }
 
-    if (!enable) {
+    if (!enable)
       this._panelBox.visible = true
-    }
 
     Main.layoutManager._queueUpdateRegions()
   }
@@ -288,7 +377,6 @@ export const Intellihide = class {
         'trigger',
         () => {
           let [x, y] = global.get_pointer()
-
           if (this._pointerIn(x, y, 1))
             this._queueUpdatePanelPosition(true)
           else this._pressureBarrier._isTriggered = false
@@ -315,6 +403,7 @@ export const Intellihide = class {
       this._edgeBarrier.destroy()
 
       this._pressureBarrier = 0
+      this._edgeBarrier = 0
     }
   }
 
@@ -334,46 +423,37 @@ export const Intellihide = class {
       !this._pressureBarrier &&
       !this._hover &&
       !Main.overview.visible &&
-      this._pointerIn(x, y, 1)
+      this._pointerIn(x, y, 1, SETTINGS.get_boolean('intellihide-use-pointer-limit-size'))
     ) {
       this._hover = true
       this._queueUpdatePanelPosition(true)
     } else if (this._hover || this._panelBox.visible) {
-      let keepRevealedOnHover = SETTINGS.get_boolean(
-        'intellihide-revealed-hover',
-      )
-      let fixedOffset = keepRevealedOnHover
-        ? this._panelBox.get_height() || 27
-        : 1
+      let keepRevealedOnHover = SETTINGS.get_boolean('intellihide-revealed-hover')
+      let fixedOffset = keepRevealedOnHover ? this._panelHeight : 1
       let hover = this._pointerIn(
         x,
         y,
         fixedOffset,
+        keepRevealedOnHover && SETTINGS.get_boolean('intellihide-revealed-hover-limit-size'),
       )
 
       if (hover == this._hover) {
-        if (this._hover && this._hoverOutTimeoutId) {
-          GLib.source_remove(this._hoverOutTimeoutId)
-          this._hoverOutTimeoutId = 0
-        }
+        if (this._hover && this._timeoutsHandler?.getId(T5))
+          this._timeoutsHandler.remove(T5)
         return
       }
 
       if (!hover) {
-        if (!this._hoverOutTimeoutId) {
-          this._hoverOutTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
-            this._hoverOutTimeoutId = 0
+        if (!this._timeoutsHandler?.getId(T5)) {
+          this._timeoutsHandler?.add([T5, HOVER_OUT_MS, () => {
             this._hoveredOut = true
             this._hover = false
             this._queueUpdatePanelPosition()
-            return GLib.SOURCE_REMOVE
-          })
+          }])
         }
       } else {
-        if (this._hoverOutTimeoutId) {
-          GLib.source_remove(this._hoverOutTimeoutId)
-          this._hoverOutTimeoutId = 0
-        }
+        if (this._timeoutsHandler?.getId(T5))
+          this._timeoutsHandler.remove(T5)
         this._hoveredOut = false
         this._hover = true
         this._queueUpdatePanelPosition()
@@ -381,20 +461,32 @@ export const Intellihide = class {
     }
   }
 
-  _pointerIn(x, y, fixedOffset) {
-    let varCoordX1 = this._monitor.x
-    let varCoordY1 = this._monitor.y
+  _pointerIn(x, y, fixedOffset, limitToPanel = false) {
+    let monitorX = this._monitor.x
+    let monitorY = this._monitor.y
+    let monitorW = this._monitor.width
+
+    let zoneX, zoneWidth
+    if (limitToPanel) {
+      zoneX = this._panelBox.x
+      zoneWidth = this._panelBox.width
+    } else {
+      zoneX = monitorX
+      zoneWidth = monitorW
+    }
 
     return (
-      (y <= this._monitor.y + fixedOffset) &&
-      x >= varCoordX1 &&
-      x < varCoordX1 + this._monitor.width &&
-      y >= varCoordY1 &&
-      y < varCoordY1 + this._monitor.height
+      y <= monitorY + fixedOffset &&
+      x >= zoneX &&
+      x < zoneX + zoneWidth &&
+      y >= monitorY &&
+      y < monitorY + this._monitor.height
     )
   }
 
   _queueUpdatePanelPosition(fromRevealMechanism) {
+    if (!this._enabled || !this._timeoutsHandler) return
+
     if (
       !fromRevealMechanism &&
       this._timeoutsHandler.getId(T2) &&
@@ -421,82 +513,65 @@ export const Intellihide = class {
   }
 
   _checkIfShouldBeVisible(fromRevealMechanism) {
-    // 1. Overview, Menus, and Manual Hold take absolute precedence
-    if (this._overviewVisible || this._checkIfMenuOpenOrGrab() || this._holdStatus) {
+    if (this._overviewVisible || this._checkIfMenuOpenOrGrab() || this._holdStatus)
       return true
-    }
 
-    // 2. If an app is fullscreen, and the setting to show in fullscreen is disabled,
-    //    absolutely forbid revealing the panel.
     let inFullscreen = this._monitor.inFullscreen
 
-    // GNOME's inFullscreen property lags slightly during workspace transitions.
-    // We dynamically verify the current active workspace to ensure the animation is instant.
     if (inFullscreen) {
       let activeWorkspace = Utils.getCurrentWorkspace()
       let hasFullscreen = activeWorkspace.list_windows().some(w =>
         w.is_fullscreen() && w.get_monitor() === this._monitor.index
       )
-
-      if (!hasFullscreen) {
-        inFullscreen = false
-      }
+      if (!hasFullscreen) inFullscreen = false
     }
 
-    if (inFullscreen && !SETTINGS.get_boolean('intellihide-show-in-fullscreen')) {
+    if (inFullscreen && !SETTINGS.get_boolean('intellihide-show-in-fullscreen'))
       return false
-    }
 
-    // 3. If we are actively hovering the panel edge
-    if (this._hover) {
+    if (this._hover)
       return true
-    }
 
-    // 4. If triggered by pressure/reveal mechanism, ensure no mouse buttons are pressed
     if (fromRevealMechanism) {
       let mouseBtnIsPressed =
         global.get_pointer()[2] & Clutter.ModifierType.BUTTON1_MASK
-
       return !mouseBtnIsPressed
     }
 
-    // 5. If we don't hide from overlapping windows, we would only show on hover (handled above)
-    if (!this._hidesFromWindows()) {
+    if (!this._hidesFromWindows())
       return false
-    }
 
-    // 6. Otherwise, show the panel if no windows are overlapping it
     return !this._windowOverlap
   }
 
   _checkIfMenuOpenOrGrab() {
     let isGrab = false
     let actor = global.stage.get_grab_actor()
-    
-    // Recursively walk up the actor tree (both visually and logically) 
-    // to see if the current grab originates from the panel.
+
     while (actor && actor !== global.stage) {
       if (actor === Main.layoutManager.dummyCursor || this._panelBox.contains(actor)) {
         isGrab = true
         break
       }
-      
-      // Bridge the gap between floating menus and their panel origin
-      let nextActor = actor._sourceActor || actor.sourceActor || 
+
+      let nextActor = actor._sourceActor || actor.sourceActor ||
                       actor._delegate?._sourceActor || actor._delegate?.sourceActor
 
       if (nextActor && nextActor !== actor) {
         actor = nextActor
         continue
       }
-      
-      actor = actor.get_parent()
+
+      if (typeof actor.get_parent === 'function')
+        actor = actor.get_parent()
+      else
+        break
     }
 
     let isMenuOpen = Main.panel.menuManager && Main.panel.menuManager.activeMenu != null
     let shouldKeepOpen = isGrab || isMenuOpen
 
-    if (shouldKeepOpen)
+    if (shouldKeepOpen && this._timeoutsHandler)
       this._timeoutsHandler.add([
         T1,
         CHECK_GRAB_MS,
@@ -507,39 +582,39 @@ export const Intellihide = class {
   }
 
   _revealPanel(immediate, noDelay = false) {
-    if (!this._panelBox.visible) {
+    if (!this._panelBox.visible)
       this._panelBox.visible = true
-    }
-    this._animatePanel(0, immediate, null, noDelay)
+    this._animatePanel(0, immediate, noDelay)
   }
 
   _hidePanel(immediate, noDelay = false) {
-    let size = this._panelBox.get_height() || 27
-    let coefficient = -1
-
-    this._animatePanel(size * coefficient, immediate, null, noDelay)
+    this._animatePanel(-this._panelHeight, immediate, noDelay)
   }
 
-  _animatePanel(destination, immediate, onComplete, noDelay = false) {
+  _animatePanel(destination, immediate, noDelay = false) {
     if (destination === this._animationDestination) return
 
     this._panelBox.remove_all_transitions()
     this._animationDestination = destination
 
-    let update = () =>
-      this._timeoutsHandler.add([
-        T3,
-        POST_ANIMATE_MS,
-        () => {
-          this._queueUpdatePanelPosition()
-        },
-      ])
+    let update = () => {
+      if (this._timeoutsHandler) {
+        this._timeoutsHandler.add([
+          T3,
+          POST_ANIMATE_MS,
+          () => this._queueUpdatePanelPosition(),
+        ])
+      }
+    }
+
+    if (St.Settings.get().enable_animations === false) immediate = true
 
     if (immediate) {
-      this._panelBox[this._translationProp] = destination
+      this._panelBox.translation_y = destination
       this._panelBox.visible = destination === 0
+      this._animationDestination = null
       update()
-    } else if (destination !== this._panelBox[this._translationProp]) {
+    } else if (destination !== this._panelBox.translation_y) {
       let delay = 0
 
       if (destination != 0 && this._hoveredOut && !noDelay)
@@ -547,22 +622,32 @@ export const Intellihide = class {
       else if (destination == 0 && !noDelay)
         delay = SETTINGS.get_int('intellihide-reveal-delay')
 
-      let tweenOpts = {
-        [this._translationProp]: destination,
+      let animMode = Clutter.AnimationMode.EASE_OUT_QUAD
+
+      this._panelBox.ease({
+        translation_y: destination,
         duration: SETTINGS.get_int('intellihide-animation-time'),
-        mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+        mode: animMode,
         delay,
         onComplete: () => {
           this._panelBox.visible = destination === 0
           this._animationDestination = null
-          if (onComplete) onComplete()
+          this._updateAccessibleName(destination === 0)
           update()
         },
-      }
-
-      this._panelBox.ease(tweenOpts)
+      })
+    } else {
+      this._animationDestination = null
     }
 
     this._hoveredOut = false
+  }
+
+  _updateAccessibleName(revealed) {
+    try {
+      let accessible = this._panelBox.get_accessible()
+      if (accessible)
+        accessible.accessible_name = revealed ? 'Top panel (visible)' : 'Top panel (hidden)'
+    } catch (_) {}
   }
 }

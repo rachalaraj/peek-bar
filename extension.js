@@ -1,27 +1,10 @@
-/*
- * Credit: This extension and the underlying proximity logic are built upon
- * the excellent groundwork established by the Dash to Panel extension.
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
- */
-
 import * as Main from 'resource:///org/gnome/shell/ui/main.js'
 import Meta from 'gi://Meta'
 import Shell from 'gi://Shell'
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js'
 import * as Intellihide from './intellihide.js'
 import * as Proximity from './proximity.js'
+import { PeekBarIndicator } from './indicator.js'
 
 export default class PeekBarExtension extends Extension {
     enable() {
@@ -39,15 +22,39 @@ export default class PeekBarExtension extends Extension {
             Meta.KeyBindingFlags.IGNORE_AUTOREPEAT,
             Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW,
             () => {
-                if (this._intellihide) {
+                if (this._intellihide)
                     this._intellihide.toggle()
-                }
             }
         )
+
+        this._settings.connectObject(
+            'changed::show-quick-settings-toggle',
+            () => this._updateQuickSettingsIndicator(),
+            this
+        )
+
+        this._updateQuickSettingsIndicator()
+    }
+
+    _updateQuickSettingsIndicator() {
+        let show = this._settings.get_boolean('show-quick-settings-toggle')
+
+        if (show && !this._indicator) {
+            this._indicator = new PeekBarIndicator(this, this._intellihide, this._settings)
+            Main.panel.statusArea.quickSettings.addExternalIndicator(this._indicator)
+        } else if (!show && this._indicator) {
+            this._indicator.destroy()
+            this._indicator = null
+        }
     }
 
     disable() {
         Main.wm.removeKeybinding('intellihide-key-toggle')
+
+        if (this._indicator) {
+            this._indicator.destroy()
+            this._indicator = null
+        }
 
         if (this._intellihide) {
             this._intellihide.destroy()
@@ -59,7 +66,10 @@ export default class PeekBarExtension extends Extension {
             this._proximityManager = null
         }
 
-        this._settings = null
+        if (this._settings) {
+            this._settings.disconnectObject(this)
+            this._settings = null
+        }
         Intellihide.setSettings(null)
     }
 }

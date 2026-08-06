@@ -4,85 +4,94 @@
   <schema path="/org/gnome/shell/extensions/peek-bar/" id="org.gnome.shell.extensions.peek-bar">
 
     <key type="b" name="intellihide-hide-from-windows">
-      <default>false</default>
-      <summary>Only hide from overlapping windows</summary>
-      <description>Dictates if the dash should only hide when in conflict with windows</description>
+      <default>true</default>
+      <summary>Hide when active window overlaps panel</summary>
     </key>
 
     <key type="b" name="intellihide-use-pointer">
       <default>true</default>
-      <summary>Intellihide mouse pointer</summary>
-      <description>The mouse pointer next to the edge of the screen reveals the panel</description>
+      <summary>Reveal on pointer edge touch</summary>
     </key>
     <key type="b" name="intellihide-use-pointer-limit-size">
       <default>false</default>
-      <summary>Limit to panel length</summary>
+      <summary>Limit reveal trigger to panel length</summary>
     </key>
     <key type="b" name="intellihide-revealed-hover">
       <default>true</default>
-      <summary>Panel stays revealed when hovered</summary>
+      <summary>Keep revealed while hovering</summary>
     </key>
     <key type="b" name="intellihide-revealed-hover-limit-size">
       <default>false</default>
-      <summary>Limit to panel length</summary>
+      <summary>Limit hover zone to panel length</summary>
     </key>
     <key type="b" name="intellihide-use-pressure">
-      <default>false</default>
-      <summary>Intellihide pressure</summary>
-      <description>To reveal the panel, pressure needs to be applied to the edge of the screen</description>
+      <default>true</default>
+      <summary>Require edge pressure to reveal</summary>
     </key>
     <key type="i" name="intellihide-pressure-threshold">
       <default>100</default>
-      <summary>Intellihide pressure threshold</summary>
-      <description>The pressure needed to reveal the panel</description>
+      <summary>Pressure threshold (px)</summary>
     </key>
     <key type="i" name="intellihide-pressure-time">
       <default>1000</default>
-      <summary>Intellihide pressure time</summary>
-      <description>The numer of milliseconds that the pressure needs to be applied to reveal the panel</description>
-    </key>
-    <key type="b" name="intellihide-show-in-fullscreen">
-      <default>false</default>
-      <summary>Allow revealing the panel while in fullscreen</summary>
-      <description>Allow the panel to be revealed while an application is in fullscreen mode</description>
+      <summary>Pressure timeout (ms)</summary>
     </key>
 
+    <key type="b" name="intellihide-show-in-fullscreen">
+      <default>false</default>
+      <summary>Allow reveal while in fullscreen</summary>
+    </key>
+
+    <key type="b" name="intellihide-notify-reveal">
+      <default>true</default>
+      <summary>Reveal panel on new notification</summary>
+    </key>
+    <key type="i" name="intellihide-notify-duration">
+      <default>4000</default>
+      <summary>Notification reveal duration (ms)</summary>
+    </key>
 
     <key type="i" name="intellihide-animation-time">
       <default>200</default>
-      <summary>Intellihide animation time</summary>
-      <description>The animation time (ms) to hide and reveal the panel</description>
+      <summary>Animation duration (ms)</summary>
     </key>
     <key type="i" name="intellihide-close-delay">
       <default>200</default>
-      <summary>Intellihide close delay</summary>
-      <description>The delay (ms) before hiding the panel</description>
+      <summary>Delay before hiding (ms)</summary>
     </key>
     <key type="i" name="intellihide-reveal-delay">
       <default>0</default>
-      <summary>Intellihide reveal delay</summary>
-      <description>The delay (ms) before revealing the panel</description>
-    </key>
-    <key type="s" name="intellihide-key-toggle-text">
-      <default>"&lt;Super&gt;i"</default>
-      <summary>Keybinding toggle intellihide</summary>
-      <description>Keybinding to reveal the panel while in intellihide mode</description>
-    </key>
-    <key type="as" name="intellihide-key-toggle">
-      <default><![CDATA[['<Super>i']]]></default>
-      <summary>Keybinding toggle intellihide</summary>
-      <description>Keybinding to reveal the panel while in intellihide mode</description>
-    </key>
-    <key type="i" name="intellihide-persisted-state">
-      <default>-1</default>
-      <summary>Persisted intellihide hold status. -1 means the option is disabled</summary>
+      <summary>Delay before revealing (ms)</summary>
     </key>
 
+    <key type="s" name="intellihide-key-toggle-text">
+      <default>"&lt;Super&gt;r"</default>
+      <summary>Toggle shortcut (display text)</summary>
+    </key>
+    <key type="as" name="intellihide-key-toggle">
+      <default><![CDATA[['<Super>r']]]></default>
+      <summary>Toggle shortcut (binding)</summary>
+    </key>
+
+    <key type="i" name="intellihide-persisted-state">
+      <default>-1</default>
+      <summary>Persisted hold status (-1 = disabled)</summary>
+    </key>
 
     <key type="i" name="intellihide-enable-start-delay">
       <default>2000</default>
-      <summary>Intellihide enable start delay</summary>
-      <description>The delay before enabling intellihide on start</description>
+      <summary>Delay before enabling on startup (ms)</summary>
     </key>
+
+    <key type="b" name="intellihide-startup-animation">
+      <default>true</default>
+      <summary>Animate panel on startup</summary>
+    </key>
+
+    <key type="b" name="show-quick-settings-toggle">
+      <default>false</default>
+      <summary>Show toggle in Control Center / Quick Settings</summary>
+    </key>
+
   </schema>
 </schemalist>
