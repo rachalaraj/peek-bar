@@ -21,10 +21,7 @@ export default class PeekBarExtension extends Extension {
             this._settings,
             Meta.KeyBindingFlags.IGNORE_AUTOREPEAT,
             Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW,
-            () => {
-                if (this._intellihide)
-                    this._intellihide.toggle()
-            }
+            () => this._intellihide.toggle()
         )
 
         this._settings.connectObject(
@@ -51,25 +48,18 @@ export default class PeekBarExtension extends Extension {
     disable() {
         Main.wm.removeKeybinding('intellihide-key-toggle')
 
-        if (this._indicator) {
-            this._indicator.destroy()
-            this._indicator = null
-        }
+        this._indicator?.destroy()
+        this._indicator = null
 
-        if (this._intellihide) {
-            this._intellihide.destroy()
-            this._intellihide = null
-        }
+        this._intellihide.destroy()
+        this._intellihide = null
 
-        if (this._proximityManager) {
-            this._proximityManager.destroy()
-            this._proximityManager = null
-        }
+        this._proximityManager.destroy()
+        this._proximityManager = null
 
-        if (this._settings) {
-            this._settings.disconnectObject(this)
-            this._settings = null
-        }
+        this._settings.disconnectObject(this)
+        this._settings = null
+
         Intellihide.setSettings(null)
     }
 }

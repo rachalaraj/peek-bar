@@ -96,7 +96,7 @@ export const ProximityManager = class {
       ) {
         focusedWindowInfo.window.connectObject(
           'notify::allocation', () => this._queueUpdate(),
-          'destroy', () => this._disconnectFocusedWindow(true),
+          'destroy', () => this._disconnectFocusedWindow(),
           this
         )
         focusedWindowInfo.metaWindow.connectObject(
@@ -136,13 +136,10 @@ export const ProximityManager = class {
 
   _disconnectFocusedWindow() {
     if (this._focusedWindowInfo) {
-      if (this._focusedWindowInfo.window)
-        this._focusedWindowInfo.window.disconnectObject(this)
-      if (this._focusedWindowInfo.metaWindow)
-        this._focusedWindowInfo.metaWindow.disconnectObject(this)
+      this._focusedWindowInfo.window.disconnectObject(this)
+      this._focusedWindowInfo.metaWindow.disconnectObject(this)
+      this._focusedWindowInfo = null
     }
-
-    this._focusedWindowInfo = null
   }
 
   _getHandledWindows() {

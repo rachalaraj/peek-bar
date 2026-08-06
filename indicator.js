@@ -31,22 +31,16 @@ class PeekBarIndicator extends QuickSettings.SystemIndicator {
         this.quickSettingsItems.push(this._toggle)
 
         this._toggle.connect('clicked', () => {
-            if (this._intellihide) {
-                this._intellihide.toggleExtension()
-                this.updateState()
-            }
+            this._intellihide.toggleExtension()
+            this.updateState()
         })
 
-        if (this._intellihide) {
-            this._intellihide.onStateChanged = () => this.updateState()
-        }
+        this._intellihide.onStateChanged = () => this.updateState()
 
         this.updateState()
     }
 
     updateState() {
-        if (!this._intellihide) return
-
         let enabled = !!this._intellihide._enabled
         let isHeld = (this._intellihide._holdStatus & 2) !== 0
         this._toggle.checked = enabled
@@ -59,8 +53,7 @@ class PeekBarIndicator extends QuickSettings.SystemIndicator {
     }
 
     destroy() {
-        if (this._intellihide)
-            this._intellihide.onStateChanged = null
+        this._intellihide.onStateChanged = null
         this.quickSettingsItems.forEach(item => item.destroy())
         super.destroy()
     }

@@ -88,11 +88,8 @@ export const Intellihide = class {
           let scale = Math.min(overviewControls._stateAdjustment.value, 1)
           let offset = Main.layoutManager.panelBox.height * scale
           box.y1 += offset
-          try {
-            originalAllocate.call(overviewControls, box)
-          } finally {
-            box.y1 -= offset
-          }
+          originalAllocate.call(overviewControls, box)
+          box.y1 -= offset
         } else {
           originalAllocate.call(overviewControls, box)
         }
@@ -301,35 +298,22 @@ export const Intellihide = class {
     Main.messageTray.connectObject(
       'source-added', (_tray, source) => {
         this._onNotification()
-        if (source) {
-          try {
-            source.connectObject('notification-added', () => this._onNotification(), this)
-          } catch (_) {}
-        }
+        if (source)
+          source.connectObject('notification-added', () => this._onNotification(), this)
       },
       this
     )
 
-    if (Main.messageTray.getSources) {
-      try {
-        let sources = Main.messageTray.getSources()
-        sources.forEach(source => {
-          source.connectObject('notification-added', () => this._onNotification(), this)
-        })
-      } catch (_) {}
-    }
+    Main.messageTray.getSources().forEach(source => {
+      source.connectObject('notification-added', () => this._onNotification(), this)
+    })
   }
 
   _disconnectNotifications() {
-    if (Main.messageTray) {
-      Main.messageTray.disconnectObject(this)
-      if (Main.messageTray.getSources) {
-        try {
-          let sources = Main.messageTray.getSources()
-          sources.forEach(source => source.disconnectObject(this))
-        } catch (_) {}
-      }
-    }
+    if (!Main.messageTray) return
+
+    Main.messageTray.disconnectObject(this)
+    Main.messageTray.getSources().forEach(source => source.disconnectObject(this))
   }
 
   _onNotification() {
@@ -644,10 +628,8 @@ export const Intellihide = class {
   }
 
   _updateAccessibleName(revealed) {
-    try {
-      let accessible = this._panelBox.get_accessible()
-      if (accessible)
-        accessible.accessible_name = revealed ? 'Top panel (visible)' : 'Top panel (hidden)'
-    } catch (_) {}
+    let accessible = this._panelBox.get_accessible()
+    if (accessible)
+      accessible.accessible_name = revealed ? 'Top panel (visible)' : 'Top panel (hidden)'
   }
 }
