@@ -47,7 +47,7 @@
       <summary>Reveal panel on new notification</summary>
     </key>
     <key type="i" name="intellihide-notify-duration">
-      <default>4000</default>
+      <default>5000</default>
       <summary>Notification reveal duration (ms)</summary>
     </key>
 
