@@ -166,6 +166,9 @@ export const Intellihide = class {
     this._revealPanel(!reset)
     Utils.setDisplayUnredirect(true)
 
+    if (Main.messageTray?._bannerBin)
+      Main.messageTray._bannerBin.translation_y = 0
+
     SETTINGS.disconnectObject(this)
     Main.overview.disconnectObject(this)
     Main.layoutManager.disconnectObject(this)
@@ -267,6 +270,7 @@ export const Intellihide = class {
 
     this._panelBox.connectObject(
       'notify::visible', () => Utils.setDisplayUnredirect(!this._panelBox.visible),
+      'notify::translation-y', () => this._updateBannerPosition(),
       this
     )
 
@@ -304,13 +308,26 @@ export const Intellihide = class {
     Main.messageTray.getSources().forEach(source => {
       source.connectObject('notification-added', () => this._onNotification(), this)
     })
+
+    if (Main.messageTray._bannerBin) {
+      Main.messageTray._bannerBin.connectObject(
+        'notify::y', () => this._updateBannerPosition(),
+        this
+      )
+    }
+
+    this._updateBannerPosition()
   }
 
   _disconnectNotifications() {
-    if (!Main.messageTray) return
-
-    Main.messageTray.disconnectObject(this)
-    Main.messageTray.getSources().forEach(source => source.disconnectObject(this))
+    if (Main.messageTray) {
+      Main.messageTray.disconnectObject(this)
+      Main.messageTray.getSources().forEach(source => source.disconnectObject(this))
+      if (Main.messageTray._bannerBin) {
+        Main.messageTray._bannerBin.disconnectObject(this)
+        Main.messageTray._bannerBin.translation_y = 0
+      }
+    }
   }
 
   _onNotification() {
@@ -322,9 +339,18 @@ export const Intellihide = class {
       this.revealAndHold(Hold.NOTIFY_PEEK)
     }
 
+    this._updateBannerPosition()
+
     this._timeoutsHandler.add([T7, SETTINGS.get_int('intellihide-notify-duration'), () => {
       this.release(Hold.NOTIFY_PEEK)
     }])
+  }
+
+  _updateBannerPosition() {
+    if (!Main.messageTray?._bannerBin) return
+
+    let visiblePanelHeight = Math.max(0, this._panelHeight + this._panelBox.translation_y)
+    Main.messageTray._bannerBin.translation_y = visiblePanelHeight
   }
 
   _setTrackPanel(enable) {
