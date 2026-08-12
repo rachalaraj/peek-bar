@@ -299,24 +299,15 @@ export const Intellihide = class {
     Main.messageTray.connectObject(
       'source-added', (_tray, source) => {
         this._onNotification()
-        if (source) {
-          source.connectObject(
-            'notification-added', () => this._onNotification(),
-            'notification-show', () => this._onNotification(),
-            this
-          )
-        }
+        if (source)
+          source.connectObject('notification-added', () => this._onNotification(), this)
       },
       'queue-changed', () => this._onNotification(),
       this
     )
 
     Main.messageTray.getSources().forEach(source => {
-      source.connectObject(
-        'notification-added', () => this._onNotification(),
-        'notification-show', () => this._onNotification(),
-        this
-      )
+      source.connectObject('notification-added', () => this._onNotification(), this)
     })
 
     if (Main.messageTray._bannerBin) {
