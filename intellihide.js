@@ -312,13 +312,13 @@ export const Intellihide = class {
 
     if (Main.messageTray._bannerBin) {
       Main.messageTray._bannerBin.connectObject(
-        'notify::visible', () => this._updateBannerPosition(),
+        'notify::visible', () => this._syncNotificationBannerState(),
         'notify::y', () => this._updateBannerPosition(),
         this
       )
     }
 
-    this._updateBannerPosition()
+    this._syncNotificationBannerState()
   }
 
   _disconnectNotifications() {
@@ -335,17 +335,35 @@ export const Intellihide = class {
   _onNotification() {
     if (!SETTINGS.get_boolean('intellihide-notify-reveal')) return
 
+    this._syncNotificationBannerState()
+
     if (this._holdStatus & Hold.NOTIFY_PEEK) {
       this._timeoutsHandler.remove(T7)
     } else {
       this.revealAndHold(Hold.NOTIFY_PEEK, false, true)
     }
 
+    let duration = SETTINGS.get_int('intellihide-notify-duration')
+    this._timeoutsHandler.add([T7, duration, () => {
+      if (!Main.messageTray?._bannerBin?.visible)
+        this.release(Hold.NOTIFY_PEEK)
+    }])
+  }
+
+  _syncNotificationBannerState() {
     this._updateBannerPosition()
 
-    this._timeoutsHandler.add([T7, SETTINGS.get_int('intellihide-notify-duration'), () => {
+    if (!SETTINGS.get_boolean('intellihide-notify-reveal')) return
+
+    let bannerVisible = !!(Main.messageTray._bannerBin && Main.messageTray._bannerBin.visible)
+
+    if (bannerVisible) {
+      if (!(this._holdStatus & Hold.NOTIFY_PEEK))
+        this.revealAndHold(Hold.NOTIFY_PEEK, false, true)
+    } else if (this._holdStatus & Hold.NOTIFY_PEEK) {
+      this._timeoutsHandler?.remove(T7)
       this.release(Hold.NOTIFY_PEEK)
-    }])
+    }
   }
 
   _updateBannerPosition() {
