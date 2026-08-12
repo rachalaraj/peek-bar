@@ -41,12 +41,6 @@
     <property name="upper">10000</property>
   </object>
 
-  <object class="GtkAdjustment" id="intellihide_notify_duration_adjustment">
-    <property name="lower">500</property>
-    <property name="page-increment">1000</property>
-    <property name="step-increment">100</property>
-    <property name="upper">30000</property>
-  </object>
 
   <object class="AdwPreferencesPage" id="page">
     <property name="title" translatable="yes">Peek Bar Options</property>
@@ -180,39 +174,7 @@
 
 
 
-    <!-- Notifications -->
-    <child>
-      <object class="AdwPreferencesGroup">
-        <property name="title" translatable="yes">Notifications</property>
 
-        <child>
-          <object class="AdwActionRow">
-            <property name="title" translatable="yes">Reveal on notification</property>
-            <property name="subtitle" translatable="yes">Show top bar when a new notification arrives</property>
-            <child>
-              <object class="GtkSwitch" id="intellihide_notify_reveal_switch">
-                <property name="valign">center</property>
-              </object>
-            </child>
-          </object>
-        </child>
-
-        <child>
-          <object class="AdwActionRow">
-            <property name="title" translatable="yes">Notification duration (ms)</property>
-            <child>
-              <object class="GtkSpinButton" id="intellihide_notify_duration_spinbutton">
-                <property name="adjustment">intellihide_notify_duration_adjustment</property>
-                <property name="numeric">True</property>
-                <property name="valign">center</property>
-                <property name="width-chars">5</property>
-              </object>
-            </child>
-          </object>
-        </child>
-
-      </object>
-    </child>
 
     <!-- Quick Settings -->
     <child>

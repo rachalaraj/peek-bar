@@ -42,14 +42,6 @@
       <summary>Allow reveal while in fullscreen</summary>
     </key>
 
-    <key type="b" name="intellihide-notify-reveal">
-      <default>true</default>
-      <summary>Reveal panel on new notification</summary>
-    </key>
-    <key type="i" name="intellihide-notify-duration">
-      <default>5000</default>
-      <summary>Notification reveal duration (ms)</summary>
-    </key>
 
     <key type="i" name="intellihide-animation-time">
       <default>200</default>

@@ -30,12 +30,10 @@ const T2 = 'limitUpdateTimeout'
 const T3 = 'postAnimateTimeout'
 const T4 = 'enableStartTimeout'
 const T5 = 'hoverOutTimeout'
-const T7 = 'notifyTimeout'
 
 export const Hold = {
   NONE: 0,
   PERMANENT: 2,
-  NOTIFY_PEEK: 32,
 }
 
 
@@ -115,9 +113,6 @@ export const Intellihide = class {
     if (SETTINGS.get_boolean('intellihide-use-pointer'))
       this._setRevealMechanism()
 
-    if (SETTINGS.get_boolean('intellihide-notify-reveal'))
-      this._connectNotifications()
-
     let lastState = SETTINGS.get_int('intellihide-persisted-state')
 
     if (lastState > -1) {
@@ -151,7 +146,6 @@ export const Intellihide = class {
 
     this._setTrackPanel(false)
     this._removeRevealMechanism()
-    this._disconnectNotifications()
 
     if (this._fullscreenIdleId) {
       GLib.Source.remove(this._fullscreenIdleId)
@@ -248,7 +242,6 @@ export const Intellihide = class {
       'changed::intellihide-hide-from-windows', () => this.reset(),
       'changed::intellihide-pressure-threshold', () => this.reset(),
       'changed::intellihide-pressure-time', () => this.reset(),
-      'changed::intellihide-notify-reveal', () => this.reset(),
       this
     )
 
@@ -270,7 +263,6 @@ export const Intellihide = class {
 
     this._panelBox.connectObject(
       'notify::visible', () => Utils.setDisplayUnredirect(!this._panelBox.visible),
-      'notify::translation-y', () => this._updateBannerPosition(),
       this
     )
 
@@ -293,84 +285,7 @@ export const Intellihide = class {
     )
   }
 
-  _connectNotifications() {
-    if (!Main.messageTray) return
 
-    Main.messageTray.connectObject(
-      'source-added', (_tray, source) => {
-        this._onNotification()
-        if (source)
-          source.connectObject('notification-added', () => this._onNotification(), this)
-      },
-      'queue-changed', () => this._onNotification(),
-      this
-    )
-
-    Main.messageTray.getSources().forEach(source => {
-      source.connectObject('notification-added', () => this._onNotification(), this)
-    })
-
-    if (Main.messageTray._bannerBin) {
-      Main.messageTray._bannerBin.connectObject(
-        'notify::visible', () => this._syncNotificationBannerState(),
-        'notify::y', () => this._updateBannerPosition(),
-        this
-      )
-    }
-
-    this._syncNotificationBannerState()
-  }
-
-  _disconnectNotifications() {
-    if (Main.messageTray) {
-      Main.messageTray.disconnectObject(this)
-      Main.messageTray.getSources().forEach(source => source.disconnectObject(this))
-      if (Main.messageTray._bannerBin) {
-        Main.messageTray._bannerBin.disconnectObject(this)
-        Main.messageTray._bannerBin.translation_y = 0
-      }
-    }
-  }
-
-  _onNotification() {
-    if (!SETTINGS.get_boolean('intellihide-notify-reveal')) return
-
-    if (this._holdStatus & Hold.NOTIFY_PEEK) {
-      this._timeoutsHandler?.remove(T7)
-    } else {
-      this.revealAndHold(Hold.NOTIFY_PEEK, false, true)
-    }
-
-    this._updateBannerPosition()
-
-    let duration = SETTINGS.get_int('intellihide-notify-duration')
-    this._timeoutsHandler?.add([T7, duration, () => {
-      this.release(Hold.NOTIFY_PEEK)
-    }])
-  }
-
-  _syncNotificationBannerState() {
-    this._updateBannerPosition()
-
-    if (!SETTINGS.get_boolean('intellihide-notify-reveal')) return
-
-    let bannerVisible = !!(Main.messageTray._banner && Main.messageTray._banner.visible)
-
-    if (bannerVisible) {
-      if (!(this._holdStatus & Hold.NOTIFY_PEEK))
-        this.revealAndHold(Hold.NOTIFY_PEEK, false, true)
-    } else if (this._holdStatus & Hold.NOTIFY_PEEK) {
-      this._timeoutsHandler?.remove(T7)
-      this.release(Hold.NOTIFY_PEEK)
-    }
-  }
-
-  _updateBannerPosition() {
-    if (!Main.messageTray?._bannerBin) return
-
-    let visiblePanelHeight = Math.max(0, this._panelHeight + this._panelBox.translation_y)
-    Main.messageTray._bannerBin.translation_y = visiblePanelHeight
-  }
 
   _setTrackPanel(enable) {
     let actorData = Utils.getTrackedActorData(this._panelBox)
@@ -639,7 +554,6 @@ export const Intellihide = class {
       this._panelBox.translation_y = destination
       this._panelBox.visible = destination === 0
       this._animationDestination = null
-      this._updateBannerPosition()
       update()
     } else if (destination !== this._panelBox.translation_y) {
       let delay = 0
@@ -656,12 +570,10 @@ export const Intellihide = class {
         duration: SETTINGS.get_int('intellihide-animation-time'),
         mode: animMode,
         delay,
-        onUpdate: () => this._updateBannerPosition(),
         onComplete: () => {
           this._panelBox.visible = destination === 0
           this._animationDestination = null
           this._updateAccessibleName(destination === 0)
-          this._updateBannerPosition()
           update()
         },
       })

@@ -31,8 +31,6 @@ export default class PeekBarPreferences extends ExtensionPreferences {
         this._bindSwitch(builder, settings, 'intellihide_revealed_hover_switch', 'intellihide-revealed-hover')
         this._bindSwitch(builder, settings, 'intellihide_revealed_hover_limit_size_switch', 'intellihide-revealed-hover-limit-size')
 
-        this._bindSwitch(builder, settings, 'intellihide_notify_reveal_switch', 'intellihide-notify-reveal')
-        this._bindSpinButton(builder, settings, 'intellihide_notify_duration_spinbutton', 'intellihide-notify-duration')
 
         this._bindSwitch(builder, settings, 'intellihide_show_in_fullscreen_switch', 'intellihide-show-in-fullscreen')
         this._bindShortcutDialog(window, builder, settings, 'intellihide_toggle_row', 'intellihide_toggle_shortcut', 'intellihide-key-toggle-text', 'intellihide-key-toggle')
