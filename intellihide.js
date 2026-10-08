@@ -9,7 +9,7 @@ import * as Layout from 'resource:///org/gnome/shell/ui/layout.js'
 import { InjectionManager } from 'resource:///org/gnome/shell/extensions/extension.js'
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js'
-import * as PointerWatcher from 'resource:///org/gnome/shell/ui/pointerWatcher.js'
+import * as PointerWatcher from './pointerWatcher.js'
 
 import * as Utils from './utils.js'
 
