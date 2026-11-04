@@ -23,6 +23,7 @@ export default class PeekBarPreferences extends ExtensionPreferences {
 
     _bindSettings(window, builder, settings) {
         this._bindSwitch(builder, settings, 'intellihide_window_hide_button', 'intellihide-hide-from-windows')
+        this._bindSwitch(builder, settings, 'intellihide_all_windows_switch', 'intellihide-hide-from-all-windows')
 
         this._bindSwitch(builder, settings, 'intellihide_use_pressure_switch', 'intellihide-use-pressure')
         this._bindSpinButton(builder, settings, 'intellihide_pressure_threshold_spinbutton', 'intellihide-pressure-threshold')

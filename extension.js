@@ -4,6 +4,7 @@ import Shell from 'gi://Shell'
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js'
 import * as Intellihide from './intellihide.js'
 import * as Proximity from './proximity.js'
+import { IntellihideManager } from './manager.js'
 import { PeekBarIndicator } from './indicator.js'
 
 export default class PeekBarExtension extends Extension {
@@ -12,9 +13,9 @@ export default class PeekBarExtension extends Extension {
         Intellihide.setSettings(this._settings)
 
         this._proximityManager = new Proximity.ProximityManager()
-        this._intellihide = new Intellihide.Intellihide(this._proximityManager)
+        this._intellihide = new IntellihideManager(this._proximityManager)
 
-        this._intellihide.init()
+        this._intellihide.enable()
 
         Main.wm.addKeybinding(
             'intellihide-key-toggle',

@@ -45,12 +45,20 @@ export const TimeoutsHandler = class {
 }
 
 let unredirectEnabled = true
-export const setDisplayUnredirect = (enable) => {
+const unredirectBlockers = new Set()
+export const setDisplayUnredirect = (enableForOwner, owner) => {
   let gsVersion = Config.PACKAGE_VERSION
 
   if (gsVersion < '50' && !Meta.is_wayland_compositor()) return
 
   let v48 = gsVersion >= '48'
+
+  if (enableForOwner)
+    unredirectBlockers.delete(owner)
+  else
+    unredirectBlockers.add(owner)
+
+  let enable = unredirectBlockers.size === 0
 
   if (enable && !unredirectEnabled)
     v48

@@ -6,7 +6,6 @@ import Shell from 'gi://Shell'
 import St from 'gi://St'
 
 import * as Layout from 'resource:///org/gnome/shell/ui/layout.js'
-import { InjectionManager } from 'resource:///org/gnome/shell/extensions/extension.js'
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js'
 import * as PointerWatcher from 'resource:///org/gnome/shell/ui/pointerWatcher.js'
@@ -39,17 +38,15 @@ export const Hold = {
 
 
 export const Intellihide = class {
-  constructor(proximityManager) {
-    this._panelBox = Main.layoutManager.panelBox
+  constructor(proximityManager, panelBox = Main.layoutManager.panelBox) {
+    this._panelBox = panelBox
+    this._isPrimary = panelBox === Main.layoutManager.panelBox
+    this._panel = panelBox.get_children().find((child) => child.menuManager) ?? Main.panel
+    this.monitorIndex = this._isPrimary
+      ? Main.layoutManager.primaryIndex
+      : Main.layoutManager.findMonitorForActor(panelBox).index
     this._proximityManager = proximityManager
     this._holdStatus = Hold.NONE
-
-    this._timeoutsHandler = new Utils.TimeoutsHandler()
-    this._injectionManager = new InjectionManager()
-  }
-
-  init() {
-    this.enable()
   }
 
   enable() {
@@ -57,7 +54,9 @@ export const Intellihide = class {
       this._timeoutsHandler = new Utils.TimeoutsHandler()
 
     this._overviewVisible = Main.overview.visible || false
-    this._monitor = Main.layoutManager.primaryMonitor
+    if (this._isPrimary)
+      this.monitorIndex = Main.layoutManager.primaryIndex
+    this._monitor = Main.layoutManager.monitors[this.monitorIndex]
     this._panelHeight = this._panelBox.get_height() || 27
     this._animationDestination = -1
     this._pendingUpdate = false
@@ -72,23 +71,6 @@ export const Intellihide = class {
 
     this._setTrackPanel(true)
     this._bindGeneralSignals()
-
-    let overviewControls = Main.overview._overview._controls
-    this._injectionManager.overrideMethod(
-      Object.getPrototypeOf(overviewControls),
-      'vfunc_allocate',
-      (originalAllocate) => (box) => {
-        if (overviewControls._stateAdjustment) {
-          let scale = Math.min(overviewControls._stateAdjustment.value, 1)
-          let offset = Main.layoutManager.panelBox.height * scale
-          box.y1 += offset
-          originalAllocate.call(overviewControls, box)
-          box.y1 -= offset
-        } else {
-          originalAllocate.call(overviewControls, box)
-        }
-      }
-    )
 
     if (this._hidesFromWindows()) {
       let watched = new Mtk.Rectangle({
@@ -107,6 +89,7 @@ export const Intellihide = class {
           this._windowOverlap = overlap
           this._queueUpdatePanelPosition()
         },
+        SETTINGS.get_boolean('intellihide-hide-from-all-windows'),
       )
     }
 
@@ -136,7 +119,7 @@ export const Intellihide = class {
       ])
   }
 
-  disable(reset) {
+  disable(reset, actorGone = false) {
     this._hover = false
 
     if (this._proximityWatchId) {
@@ -144,7 +127,8 @@ export const Intellihide = class {
       this._proximityWatchId = 0
     }
 
-    this._setTrackPanel(false)
+    if (!actorGone)
+      this._setTrackPanel(false)
     this._removeRevealMechanism()
 
     if (this._fullscreenIdleId) {
@@ -157,10 +141,11 @@ export const Intellihide = class {
       this._startupMappedId = 0
     }
 
-    this._revealPanel(!reset)
-    Utils.setDisplayUnredirect(true)
+    if (!actorGone)
+      this._revealPanel(!reset)
+    Utils.setDisplayUnredirect(true, this._panelBox)
 
-    if (Main.messageTray?._bannerBin)
+    if (this._isPrimary && Main.messageTray?._bannerBin)
       Main.messageTray._bannerBin.translation_y = 0
 
     SETTINGS.disconnectObject(this)
@@ -173,30 +158,19 @@ export const Intellihide = class {
       this._timeoutsHandler.destroy()
       this._timeoutsHandler = null
     }
-    this._injectionManager.clear()
   }
 
-  destroy() {
-    this.disable()
+  destroy(actorGone = false) {
+    if (this.isEnabled())
+      this.disable(false, actorGone)
   }
 
   isEnabled() {
     return this._timeoutsHandler != null
   }
 
-  toggleExtension() {
-    if (this.isEnabled())
-      this.disable()
-    else
-      this.enable()
-    this.onStateChanged?.()
-  }
-
-  toggle() {
-    this[this._holdStatus & Hold.PERMANENT ? 'release' : 'revealAndHold'](
-      Hold.PERMANENT,
-    )
-    this.onStateChanged?.()
+  isHeld() {
+    return (this._holdStatus & Hold.PERMANENT) !== 0
   }
 
   revealAndHold(holdStatus, immediate) {
@@ -240,6 +214,7 @@ export const Intellihide = class {
       'changed::intellihide-use-pointer', () => this.reset(),
       'changed::intellihide-use-pressure', () => this.reset(),
       'changed::intellihide-hide-from-windows', () => this.reset(),
+      'changed::intellihide-hide-from-all-windows', () => this.reset(),
       'changed::intellihide-pressure-threshold', () => this.reset(),
       'changed::intellihide-pressure-time', () => this.reset(),
       this
@@ -262,7 +237,7 @@ export const Intellihide = class {
     )
 
     this._panelBox.connectObject(
-      'notify::visible', () => Utils.setDisplayUnredirect(!this._panelBox.visible),
+      'notify::visible', () => Utils.setDisplayUnredirect(!this._panelBox.visible, this._panelBox),
       this
     )
 
@@ -279,10 +254,12 @@ export const Intellihide = class {
       this
     )
 
-    Main.layoutManager.connectObject(
-      'monitors-changed', () => this.reset(),
-      this
-    )
+    if (this._isPrimary) {
+      Main.layoutManager.connectObject(
+        'monitors-changed', () => this.reset(),
+        this
+      )
+    }
   }
 
 
@@ -509,7 +486,8 @@ export const Intellihide = class {
         break
     }
 
-    let isMenuOpen = Main.panel.menuManager && Main.panel.menuManager.activeMenu != null
+    let activeMenu = this._panel.menuManager?.activeMenu
+    let isMenuOpen = activeMenu != null && this._panelBox.contains(activeMenu.sourceActor)
     let shouldKeepOpen = isGrab || isMenuOpen
 
     if (shouldKeepOpen && this._timeoutsHandler)
