@@ -7,6 +7,10 @@
       <default>true</default>
       <summary>Hide when active window overlaps panel</summary>
     </key>
+    <key type="b" name="intellihide-hide-from-all-windows">
+      <default>true</default>
+      <summary>Consider all windows on the panel's monitor</summary>
+    </key>
 
     <key type="b" name="intellihide-use-pointer">
       <default>true</default>

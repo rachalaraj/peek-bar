@@ -63,6 +63,18 @@
         </child>
 
         <child>
+          <object class="AdwActionRow">
+            <property name="title" translatable="yes">Consider all windows</property>
+            <property name="subtitle" translatable="yes">Hide when any window on the top bar's monitor touches it, not only the focused one</property>
+            <child>
+              <object class="GtkSwitch" id="intellihide_all_windows_switch">
+                <property name="valign">center</property>
+              </object>
+            </child>
+          </object>
+        </child>
+
+        <child>
           <object class="AdwActionRow" id="intellihide_toggle_row">
             <property name="title" translatable="yes">Toggle shortcut</property>
             <property name="subtitle" translatable="yes">Permanently show or hide top bar</property>

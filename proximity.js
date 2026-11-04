@@ -9,9 +9,10 @@ const MIN_UPDATE_MS = 200
 const T1 = 'limitUpdateTimeout'
 
 class ProximityRectWatch {
-  constructor(rect, monitorIndex, xThreshold, yThreshold, handler) {
+  constructor(rect, monitorIndex, xThreshold, yThreshold, handler, allWindows) {
     this.rect = rect
     this.monitorIndex = monitorIndex
+    this.allWindows = allWindows
     this.overlap = false
     this.threshold = [xThreshold, yThreshold]
     this.handler = handler
@@ -32,13 +33,14 @@ export const ProximityManager = class {
     this._setFocusedWindow()
   }
 
-  createWatch(watched, monitorIndex, xThreshold, yThreshold, handler) {
+  createWatch(watched, monitorIndex, xThreshold, yThreshold, handler, allWindows = false) {
     let watch = new ProximityRectWatch(
       watched,
       monitorIndex,
       xThreshold,
       yThreshold,
       handler,
+      allWindows,
     )
 
     this._watches[this._counter] = watch
@@ -149,13 +151,27 @@ export const ProximityManager = class {
     }
   }
 
-  _getHandledWindows(monitorIndex) {
-    // Consider every window of the watched monitor rather than only the
-    // focused one, so focusing a window on another monitor, or opening a small
-    // window over a fullscreen/maximized one, doesn't reveal the panel.
-    return Utils.getCurrentWorkspace().list_windows().filter(
-      (mw) => mw.get_monitor() == monitorIndex && this._checkIfHandledWindow(mw),
-    )
+  _getHandledWindows(watch) {
+    if (watch.allWindows) {
+      // Consider every window of the watched monitor rather than only the
+      // focused one, so focusing a window on another monitor, or opening a small
+      // window over a fullscreen/maximized one, doesn't reveal the panel.
+      return Utils.getCurrentWorkspace().list_windows().filter(
+        (mw) => mw.get_monitor() == watch.monitorIndex && this._checkIfHandledWindow(mw),
+      )
+    }
+
+    let focusedWindow = global.display.focus_window
+    if (!focusedWindow)
+      return []
+
+    let info = this._getFocusedWindowInfo(focusedWindow)
+    let metaWindow = info ? info.metaWindow : focusedWindow
+
+    if (this._checkIfHandledWindow(metaWindow))
+      return [metaWindow]
+
+    return []
   }
 
   _checkIfHandledWindow(metaWindow) {
@@ -186,7 +202,7 @@ export const ProximityManager = class {
 
     Object.keys(this._watches).forEach((id) => {
       let watch = this._watches[id]
-      let metaWindows = this._getHandledWindows(watch.monitorIndex)
+      let metaWindows = this._getHandledWindows(watch)
       let overlap = metaWindows.some((mw) => this._checkProximity(mw, watch))
 
       if (overlap !== watch.overlap) {
