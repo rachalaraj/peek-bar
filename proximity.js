@@ -9,9 +9,10 @@ const MIN_UPDATE_MS = 200
 const T1 = 'limitUpdateTimeout'
 
 class ProximityRectWatch {
-  constructor(rect, monitorIndex, xThreshold, yThreshold, handler) {
+  constructor(rect, monitorIndex, xThreshold, yThreshold, handler, allWindows) {
     this.rect = rect
     this.monitorIndex = monitorIndex
+    this.allWindows = allWindows
     this.overlap = false
     this.threshold = [xThreshold, yThreshold]
     this.handler = handler
@@ -32,13 +33,14 @@ export const ProximityManager = class {
     this._setFocusedWindow()
   }
 
-  createWatch(watched, monitorIndex, xThreshold, yThreshold, handler) {
+  createWatch(watched, monitorIndex, xThreshold, yThreshold, handler, allWindows = false) {
     let watch = new ProximityRectWatch(
       watched,
       monitorIndex,
       xThreshold,
       yThreshold,
       handler,
+      allWindows,
     )
 
     this._watches[this._counter] = watch
@@ -69,7 +71,12 @@ export const ProximityManager = class {
   }
 
   _bindSignals() {
-    global.window_manager.connectObject('switch-workspace', () => this._queueUpdate(), this)
+    global.window_manager.connectObject(
+      'switch-workspace', () => this._queueUpdate(),
+      'minimize', () => this._queueUpdate(),
+      'unminimize', () => this._queueUpdate(),
+      this
+    )
     Main.overview.connectObject('hidden', () => this._queueUpdate(), this)
     global.display.connectObject(
       'notify::focus-window',
@@ -78,6 +85,8 @@ export const ProximityManager = class {
         this._queueUpdate()
       },
       'restacked', () => this._queueUpdate(),
+      'window-entered-monitor', () => this._queueUpdate(),
+      'window-left-monitor', () => this._queueUpdate(),
       this
     )
   }
@@ -142,7 +151,16 @@ export const ProximityManager = class {
     }
   }
 
-  _getHandledWindows() {
+  _getHandledWindows(watch) {
+    if (watch.allWindows) {
+      // Consider every window of the watched monitor rather than only the
+      // focused one, so focusing a window on another monitor, or opening a small
+      // window over a fullscreen/maximized one, doesn't reveal the panel.
+      return Utils.getCurrentWorkspace().list_windows().filter(
+        (mw) => mw.get_monitor() == watch.monitorIndex && this._checkIfHandledWindow(mw),
+      )
+    }
+
     let focusedWindow = global.display.focus_window
     if (!focusedWindow)
       return []
@@ -182,10 +200,9 @@ export const ProximityManager = class {
 
     this._timeoutsHandler.add([T1, MIN_UPDATE_MS, () => this._endLimitUpdate()])
 
-    let metaWindows = this._getHandledWindows()
-
     Object.keys(this._watches).forEach((id) => {
       let watch = this._watches[id]
+      let metaWindows = this._getHandledWindows(watch)
       let overlap = metaWindows.some((mw) => this._checkProximity(mw, watch))
 
       if (overlap !== watch.overlap) {

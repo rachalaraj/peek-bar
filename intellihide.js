@@ -107,6 +107,7 @@ export const Intellihide = class {
           this._windowOverlap = overlap
           this._queueUpdatePanelPosition()
         },
+        SETTINGS.get_boolean('intellihide-hide-from-all-windows'),
       )
     }
 
@@ -240,6 +241,7 @@ export const Intellihide = class {
       'changed::intellihide-use-pointer', () => this.reset(),
       'changed::intellihide-use-pressure', () => this.reset(),
       'changed::intellihide-hide-from-windows', () => this.reset(),
+      'changed::intellihide-hide-from-all-windows', () => this.reset(),
       'changed::intellihide-pressure-threshold', () => this.reset(),
       'changed::intellihide-pressure-time', () => this.reset(),
       this
