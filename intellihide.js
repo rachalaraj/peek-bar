@@ -486,7 +486,8 @@ export const Intellihide = class {
         break
     }
 
-    let isMenuOpen = this._panel.menuManager && this._panel.menuManager.activeMenu != null
+    let activeMenu = this._panel.menuManager?.activeMenu
+    let isMenuOpen = activeMenu != null && this._panelBox.contains(activeMenu.sourceActor)
     let shouldKeepOpen = isGrab || isMenuOpen
 
     if (shouldKeepOpen && this._timeoutsHandler)
